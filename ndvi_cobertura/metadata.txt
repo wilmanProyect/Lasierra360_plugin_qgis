@@ -1,0 +1,15 @@
+[general]
+name=NDVI Cobertura
+qgisMinimumVersion=3.16
+qgisMaximumVersion=4.99
+supportsQt6=True
+description=Calcula el área (ha) y el porcentaje de suelo (rojo), baja vegetación (amarillo) y alta vegetación (verde) en ortomosaicos NDVI, píxel por píxel.
+about=Clasifica píxel por píxel uno o varios ortomosaicos NDVI (imágenes coloreadas RGB como las de DJI Terra/SmartFarm, rasters con valores NDVI o multiespectrales) en tres clases (rojo = suelo, amarillo = baja vegetación, verde = alta vegetación) usando umbrales configurables, y genera un informe en hectáreas y porcentaje. Admite rasters NDVI de una banda o rasters multiespectrales (calcula NDVI a partir de las bandas Rojo y NIR), límite opcional por polígono (lote) y exportación a CSV, HTML e informe PDF formal con logo, mapas, tablas y guía de lectura.
+version=1.2.0
+author=Rio Verde Sistema
+email=lasierra360.corp@gmail.com
+category=Raster
+tags=ndvi,agricultura,drone,ortomosaico,cobertura,vegetacion,area
+icon=icon.svg
+experimental=False
+deprecated=False
