@@ -283,21 +283,59 @@ def _kpis(fila):
             .format(cab, val))
 
 
-def _tabla_lotes(filas, hay_total):
+def _kpis_rinde(fila, parametros):
+    if not parametros.get("habilitado") or len(fila) < 12:
+        return ""
+    cultivo = _esc(parametros.get("cultivo", "Cultivo"))
+    estadio_cod = _esc(parametros.get("estadio_codigo", ""))
+    estadio_nom = _esc(parametros.get("estadio_nombre", "").split("–")[-1].strip())
+    cab = (
+        '<td width="33%" bgcolor="{o}" align="center" style="color:#ffffff; font-weight:bold; font-size:9pt">'
+        'PRODUCCIÓN TOTAL ESTIMADA</td>'
+        '<td width="33%" bgcolor="{o}" align="center" style="color:#ffffff; font-weight:bold; font-size:9pt">'
+        'RENDIMIENTO PROMEDIO PONDERADO</td>'
+        '<td width="34%" bgcolor="{o}" align="center" style="color:#ffffff; font-weight:bold; font-size:9pt">'
+        'CULTIVO Y ESTADIO FENOLÓGICO</td>'
+    ).format(o="#2d5016")
+    val = (
+        '<td bgcolor="#eef5e8" align="center"><span style="font-size:16pt; font-weight:bold; color:#2d5016">{} t</span>'
+        '<br/><span style="font-size:8.5pt">producción estimada</span></td>'
+        '<td bgcolor="#eef5e8" align="center"><span style="font-size:16pt; font-weight:bold; color:#2d5016">{} t/ha</span>'
+        '<br/><span style="font-size:8.5pt">media ponderada</span></td>'
+        '<td bgcolor="#eef5e8" align="center"><span style="font-size:14pt; font-weight:bold; color:#2d5016">{} ({})</span>'
+        '<br/><span style="font-size:8.5pt">{}</span></td>'
+    ).format(fmt(fila[11], 1), fmt(fila[10], 2), cultivo, estadio_cod, estadio_nom)
+    return '<table width="100%" cellspacing="4" cellpadding="6"><tr>{}</tr><tr>{}</tr></table>'.format(cab, val)
+
+
+def _tabla_lotes(filas, hay_total, parametros=None):
+    rinde_hab = bool(parametros and parametros.get("habilitado"))
+    col_extra_cab = ""
+    if rinde_hab:
+        col_extra_cab = (
+            '<th align="right" bgcolor="#2d5016" style="color:#ffffff">Rinde est.<br/>(t/ha)</th>'
+            '<th align="right" bgcolor="#2d5016" style="color:#ffffff">Producción<br/>(t)</th>'
+        )
     cab = ('<tr><th align="left">Lote</th><th align="right">Área total<br/>(ha)</th>'
            + "".join('<th align="right" bgcolor="{c}" style="color:{t}">{e}<br/>(ha)</th>'
                      '<th align="right" bgcolor="{c}" style="color:{t}">%</th>'
                      .format(c=c, t=COLOR_TEXTO[v], e=_esc(e)) for v, e, c in CLASES)
-           + '<th align="right">Vegetación<br/>total (ha)</th><th align="right">%</th></tr>')
+           + '<th align="right">Vegetación<br/>total (ha)</th><th align="right">%</th>'
+           + col_extra_cab + '</tr>')
     cuerpo = ""
     for n, fila in enumerate(filas):
         es_total = hay_total and n == len(filas) - 1
         fondo = ' bgcolor="#e4ecdc"' if es_total else (' bgcolor="#f6f8f4"' if n % 2 else "")
         peso = "font-weight:bold; " if es_total else ""
         celdas = '<td style="{}">{}</td>'.format(peso, _esc(fila[0] if es_total else nombre_corto(fila[0])))
-        for j, v in enumerate(fila[1:], start=1):
+        for j, v in enumerate(fila[1:10], start=1):
             dec = 1 if j in (3, 5, 7, 9) else 2
             celdas += '<td align="right" style="{}">{}</td>'.format(peso, fmt(v, dec))
+        if rinde_hab and len(fila) >= 12:
+            celdas += '<td align="right" style="{}background-color:{};">{}</td>'.format(
+                peso, "#e8f2e0" if not es_total else "#d5e6cb", fmt(fila[10], 2))
+            celdas += '<td align="right" style="{}background-color:{};">{}</td>'.format(
+                peso, "#e8f2e0" if not es_total else "#d5e6cb", fmt(fila[11], 1))
         cuerpo += "<tr{}>{}</tr>".format(fondo, celdas)
     return ('<table width="100%" cellspacing="0" cellpadding="4" border="0.5" '
             'style="border-collapse:collapse; border-color:#c8c8c8">{}{}</table>'.format(cab, cuerpo))
@@ -311,7 +349,7 @@ def _tabla_datos(pares):
             'style="border-collapse:collapse; border-color:#c8c8c8">{}</table>'.format(filas))
 
 
-def _texto_resumen(filas, resultados):
+def _texto_resumen(filas, resultados, parametros=None):
     t = filas[-1]
     n = len(resultados)
     texto = ("Se {} <b>{} ortomosaico{}</b> con una superficie total de <b>{} ha</b>. "
@@ -328,6 +366,12 @@ def _texto_resumen(filas, resultados):
         texto += (" El lote con mayor proporción de suelo es <b>{}</b> ({} %), y el de mayor proporción de "
                   "alta vegetación es <b>{}</b> ({} %).").format(
             _esc(nombre_corto(peor[0])), fmt(peor[3], 1), _esc(nombre_corto(mejor[0])), fmt(mejor[7], 1))
+    if parametros and parametros.get("habilitado") and len(t) >= 12:
+        texto += ("<br/><br/><b>Estimación de producción:</b> para el cultivo <b>{}</b> en estadio <b>{}</b>, "
+                  "se proyecta una producción total de <b>{} t</b> con un rendimiento promedio ponderado de "
+                  "<b>{} t/ha</b>.").format(
+            _esc(parametros.get("cultivo", "")), _esc(parametros.get("estadio_nombre", "")),
+            fmt(t[11], 1), fmt(t[10], 2))
     return "<p>{}</p>".format(texto)
 
 
@@ -407,32 +451,69 @@ def _guia(parametros, rangos, filas):
     partes.append(
         "<li>Si dos ortomosaicos se superponen, la zona común se suma en ambos lotes en el total.</li>"
         "<li>Los resultados reflejan el estado del cultivo en la fecha del vuelo.</li></ul>")
+
+    if parametros.get("habilitado"):
+        partes.append(
+            "<h3>4.6 Estimación de Rendimiento y Estadio Fenológico</h3>"
+            "<p>El análisis integra la estimación de productividad para el cultivo <b>{cultivo}</b> en "
+            "estadio fenológico <b>{estadio}</b>.</p>"
+            "<p><b>Criterio agronómico del estadio:</b> {ayuda}</p>"
+            "<p><b>Metodología de cálculo:</b> la producción total de cada lote se obtiene sumando la superficie "
+            "de cada clase de vigor multiplicada por su rendimiento de referencia estimado (Alta vegetación: {ra} t/ha, "
+            "Baja vegetación: {rb} t/ha, Suelo: {rs} t/ha). El rendimiento promedio del lote y del campo corresponde a "
+            "la media ponderada por hectárea.</p>".format(
+                cultivo=_esc(parametros.get("cultivo", "")),
+                estadio=_esc(parametros.get("estadio_nombre", "")),
+                ayuda=_esc(parametros.get("estadio_ayuda", "")),
+                ra=fmt(parametros.get("rinde_alta", 0.0), 2),
+                rb=fmt(parametros.get("rinde_baja", 0.0), 2),
+                rs=fmt(parametros.get("rinde_suelo", 0.0), 2),
+            )
+        )
     return "".join(partes)
 
 
 def _html_principal(resultados, filas, parametros, rangos, datos, hay_total, ancho96):
     t = filas[-1]
+    rinde_hab = bool(parametros and parametros.get("habilitado") and len(t) >= 12)
+    datos_portada = [
+        ("Proyecto", datos.get("proyecto")),
+        ("Cliente / Propiedad", datos.get("cliente")),
+        ("Fecha de vuelo", datos.get("fecha_vuelo")),
+        ("Fecha de emisión", parametros["fecha"]),
+        ("Elaborado por", datos.get("elaborado")),
+        ("Lotes analizados", str(len(resultados))),
+        ("Superficie total analizada", "{} ha".format(fmt(t[1]))),
+    ]
+    if rinde_hab:
+        datos_portada.extend([
+            ("Cultivo", parametros.get("cultivo")),
+            ("Estadio fenológico", parametros.get("estadio_nombre")),
+            ("Rendimiento promedio ponderado", "{} t/ha".format(fmt(t[10], 2))),
+            ("Producción total estimada", "{} t".format(fmt(t[11], 1))),
+        ])
     portada = [
-        "<h1>Informe de Cobertura Vegetal</h1>",
+        "<h1>Informe de Cobertura Vegetal y Rendimiento</h1>" if rinde_hab else "<h1>Informe de Cobertura Vegetal</h1>",
+        '<p class="sub">Análisis de ortomosaicos NDVI — superficie, vigor vegetal y producción estimada</p>'
+        if rinde_hab else
         '<p class="sub">Análisis de ortomosaicos NDVI — superficie de suelo, baja y alta vegetación</p>',
         "<p>&nbsp;</p>",
-        _tabla_datos([
-            ("Proyecto", datos.get("proyecto")),
-            ("Cliente / Propiedad", datos.get("cliente")),
-            ("Fecha de vuelo", datos.get("fecha_vuelo")),
-            ("Fecha de emisión", parametros["fecha"]),
-            ("Elaborado por", datos.get("elaborado")),
-            ("Lotes analizados", str(len(resultados))),
-            ("Superficie total analizada", "{} ha".format(fmt(t[1]))),
-        ]),
+        _tabla_datos(datos_portada),
         ESPACIO,
         "<h2>1. Resumen general</h2>",
         _kpis(t),
+    ]
+    if rinde_hab:
+        portada.extend([
+            ESPACIO,
+            _kpis_rinde(t, parametros),
+        ])
+    portada.extend([
         ESPACIO,
         _barra(t),
         ESPACIO,
-        _texto_resumen(filas, resultados),
-    ]
+        _texto_resumen(filas, resultados, parametros),
+    ])
     mapa = [
         '<h2 style="page-break-before:always">2. Mapa general de cobertura</h2>',
         '<p align="center"><img src="img://mapa_general" width="{}"/></p>'.format(ancho96),
@@ -441,9 +522,11 @@ def _html_principal(resultados, filas, parametros, rangos, datos, hay_total, anc
         'vegetación · Verde: alta vegetación.</p>',
     ]
     tabla = [
+        '<h2 style="page-break-before:always">3. Superficie y producción por lote</h2>' if rinde_hab else
         '<h2 style="page-break-before:always">3. Superficie por lote</h2>',
+        "<p>Superficie en hectáreas, porcentaje y producción estimada de cada lote.</p>" if rinde_hab else
         "<p>Superficie en hectáreas y porcentaje de cada clase respecto del área total de cada lote.</p>",
-        _tabla_lotes(filas, hay_total),
+        _tabla_lotes(filas, hay_total, parametros),
         '<p class="nota">Criterios: {}.</p>'.format(" · ".join(
             "{}: {}".format(_esc(NOMBRE[v]), _esc(rangos[v])) for v, _, _ in CLASES)),
     ]
@@ -451,7 +534,7 @@ def _html_principal(resultados, filas, parametros, rangos, datos, hay_total, anc
         CSS, "".join(portada), "".join(mapa), "".join(tabla), _guia(parametros, rangos, filas)))
 
 
-def _html_ficha(numero, fila, rangos, res, ancho96):
+def _html_ficha(numero, fila, rangos, res, ancho96, parametros=None):
     nombre = nombre_corto(fila[0])
     titulo_seccion = "<h2>5. Fichas por lote</h2>" if numero == 1 else ""
     filas_clase = ""
@@ -460,6 +543,20 @@ def _html_ficha(numero, fila, rangos, res, ancho96):
             '<tr><td bgcolor="{c}" width="4%">&nbsp;</td><td>{e}</td><td>{r}</td>'
             '<td align="right">{ha}</td><td align="right">{p} %</td></tr>').format(
             c=color, e=_esc(etiqueta), r=_esc(rangos[valor]), ha=fmt(fila[2 + 2 * i]), p=fmt(fila[3 + 2 * i], 1))
+
+    filas_extra_tabla = ""
+    texto_extra_rinde = ""
+    if parametros and parametros.get("habilitado") and len(fila) >= 12:
+        filas_extra_tabla = (
+            '<tr bgcolor="#eef5e8"><td></td><td colspan="2"><b>Rendimiento promedio estimado</b></td>'
+            '<td align="right"><b>{} t/ha</b></td><td align="right">--</td></tr>'
+            '<tr bgcolor="#e4ecdc"><td></td><td colspan="2"><b>Producción estimada del lote</b></td>'
+            '<td align="right"><b>{} t</b></td><td align="right">--</td></tr>'
+        ).format(fmt(fila[10], 2), fmt(fila[11], 1))
+        texto_extra_rinde = (" Se proyecta una cosecha de <b>{} t</b> con un rendimiento promedio de "
+                             "<b>{} t/ha</b> (Estadio: <b>{}</b>).").format(
+            fmt(fila[11], 1), fmt(fila[10], 2), _esc(parametros.get("estadio_codigo", "")))
+
     tabla = (
         '<table width="100%" cellspacing="0" cellpadding="4" border="0.5" '
         'style="border-collapse:collapse; border-color:#c8c8c8">'
@@ -468,11 +565,11 @@ def _html_ficha(numero, fila, rangos, res, ancho96):
         '<tr bgcolor="#eef3ea"><td></td><td colspan="2"><b>Vegetación total (baja + alta)</b></td>'
         '<td align="right"><b>{}</b></td><td align="right"><b>{} %</b></td></tr>'
         '<tr bgcolor="#e4ecdc"><td></td><td colspan="2"><b>Área total del lote</b></td>'
-        '<td align="right"><b>{}</b></td><td align="right"><b>100 %</b></td></tr></table>').format(
-        filas_clase, fmt(fila[8]), fmt(fila[9], 1), fmt(fila[1]))
+        '<td align="right"><b>{}</b></td><td align="right"><b>100 %</b></td></tr>{}</table>').format(
+        filas_clase, fmt(fila[8]), fmt(fila[9], 1), fmt(fila[1]), filas_extra_tabla)
     texto = ("<p>Del total de <b>{} ha</b> del lote, el <b>{} %</b> presenta vegetación "
-             "(<b>{} ha</b>) y el <b>{} %</b> corresponde a suelo (<b>{} ha</b>).</p>").format(
-        fmt(fila[1]), fmt(fila[9], 1), fmt(fila[8]), fmt(fila[3], 1), fmt(fila[2]))
+             "(<b>{} ha</b>) y el <b>{} %</b> corresponde a suelo (<b>{} ha</b>).{}</p>").format(
+        fmt(fila[1]), fmt(fila[9], 1), fmt(fila[8]), fmt(fila[3], 1), fmt(fila[2]), texto_extra_rinde)
     return ("<html><head><style>{css}</style></head><body>{seccion}"
             "<h3 style=\"font-size:13pt\">5.{n} Ficha de lote: {nombre}</h3>"
             '<p align="center"><img src="img://mapa_lote" width="{w}"/></p>{ley}'
@@ -495,12 +592,28 @@ def _html_anexo(resultados, parametros, rangos, numero):
               "120° verde). Los píxeles transparentes (fuera del vuelo) se excluyen."
               if parametros["modo"] == "rgb" else
               "Cada píxel se clasificó según su valor de NDVI. Los píxeles sin dato se excluyen.")
+
+    info_rinde = ""
+    if parametros.get("habilitado"):
+        info_rinde = (
+            "<p><b>Parámetros de estimación de rendimiento:</b> Cultivo: {cultivo} · Estadio: {estadio}. "
+            "Rindes de referencia: Alta vegetación {ra} t/ha, Baja vegetación {rb} t/ha, "
+            "Suelo {rs} t/ha.</p>".format(
+                cultivo=_esc(parametros.get("cultivo", "")),
+                estadio=_esc(parametros.get("estadio_nombre", "")),
+                ra=fmt(parametros.get("rinde_alta", 0.0), 2),
+                rb=fmt(parametros.get("rinde_baja", 0.0), 2),
+                rs=fmt(parametros.get("rinde_suelo", 0.0), 2),
+            )
+        )
+
     return ("<html><head><style>{css}</style></head><body>"
             "<h2>{n}. Anexo técnico: metodología y datos de origen</h2>"
             "<p><b>Origen de los datos:</b> {origen}.</p>"
             "<p><b>Método:</b> {metodo} La superficie de cada clase es la suma del área real de sus píxeles, "
             "calculada con el tamaño de píxel del ortomosaico{crs}.</p>"
             "<p><b>Criterios de clasificación:</b></p><ul>{criterios}</ul>"
+            "{info_rinde}"
             "{limite}" + ESPACIO +
             '<table width="100%" cellspacing="0" cellpadding="4" border="0.5" '
             'style="border-collapse:collapse; border-color:#c8c8c8">'
@@ -511,6 +624,7 @@ def _html_anexo(resultados, parametros, rangos, numero):
         css=CSS, n=numero, origen=_esc(parametros["origen"]), metodo=metodo,
         crs=" (sistema de referencia {})".format(_esc(crs.authid())) if crs.isValid() else "",
         criterios=criterios,
+        info_rinde=info_rinde,
         limite=("<p><b>Límite de cálculo:</b> {}.</p>".format(_esc(parametros["poligono"]))
                 if parametros.get("poligono") else ""),
         filas=filas, fecha=_esc(parametros["fecha"]))
@@ -614,11 +728,17 @@ def generar_pdf(ruta, resultados, parametros, rangos, datos, capas_fondo=(), cap
         if progreso is not None:
             progreso(texto)
 
-    filas = [fila_informe(r["nombre"], r["areas_m2"]) for r in resultados]
+    rp = parametros.get("rinde_params") or {
+        "habilitado": parametros.get("habilitado", False),
+        "rinde_alta": parametros.get("rinde_alta", 0.0),
+        "rinde_baja": parametros.get("rinde_baja", 0.0),
+        "rinde_suelo": parametros.get("rinde_suelo", 0.0),
+    }
+    filas = [fila_informe(r["nombre"], r["areas_m2"], rp) for r in resultados]
     hay_total = len(resultados) > 1
     if hay_total:
         filas.append(fila_informe("TOTAL", {c: sum(r["areas_m2"][c] for r in resultados)
-                                            for c in (SUELO, BAJA, ALTA)}))
+                                            for c in (SUELO, BAJA, ALTA)}, rp))
 
     writer = QPdfWriter(ruta)
     writer.setResolution(DPI)
@@ -649,7 +769,7 @@ def generar_pdf(ruta, resultados, parametros, rangos, datos, capas_fondo=(), cap
         blanco = QImage(MAPA_LOTE[0], MAPA_LOTE[1], QImage.Format.Format_RGB888)
         blanco.fill(QColor("#ffffff"))
         for i, res in enumerate(resultados, start=1):
-            total += _documento(writer, _html_ficha(i, filas[i - 1], rangos, res, ancho96),
+            total += _documento(writer, _html_ficha(i, filas[i - 1], rangos, res, ancho96, parametros),
                                 {"img://mapa_lote": blanco}).pageCount()
 
     pag = _Paginador(writer, datos, total)
@@ -670,7 +790,7 @@ def generar_pdf(ruta, resultados, parametros, rangos, datos, capas_fondo=(), cap
                         # Solo hay un lote: renderizado normal sin máscara
                         img["img://mapa_lote"] = renderizar_mapa(
                             validas, [capa], capas_fondo, contorno, *MAPA_LOTE)
-                pag.dibujar(_documento(writer, _html_ficha(i, filas[i - 1], rangos, res, ancho96), img))
+                pag.dibujar(_documento(writer, _html_ficha(i, filas[i - 1], rangos, res, ancho96, parametros), img))
 
         pag.dibujar(anexo)
     finally:

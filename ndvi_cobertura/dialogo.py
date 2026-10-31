@@ -24,6 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -43,14 +44,16 @@ from qgis.PyQt.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from . import analisis, informe_pdf
 from .analisis import ALTA, BAJA, CLASES, SUELO
 from .formato import fila_informe, fmt
 
-COLUMNAS = [
+COLUMNAS_BASE = [
     "Ortomosaico",
     "Área total (ha)",
     "Suelo (ha)", "Suelo (%)",
@@ -58,8 +61,67 @@ COLUMNAS = [
     "Alta veg. (ha)", "Alta veg. (%)",
     "Vegetación total (ha)", "Vegetación total (%)",
 ]
+COLUMNAS_RINDE = [
+    "Rinde est. (t/ha)",
+    "Producción est. (t)",
+]
+COLUMNAS = COLUMNAS_BASE + COLUMNAS_RINDE
+
 COLOR_COLUMNA = {2: "#d7191c", 3: "#d7191c", 4: "#fdd700", 5: "#fdd700",
-                 6: "#1a9641", 7: "#1a9641"}
+                 6: "#1a9641", 7: "#1a9641", 10: "#7dc300", 11: "#7dc300"}
+
+CULTIVOS = [
+    ("Soja", {"rinde_alta": 3.80, "rinde_baja": 2.20, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Maíz", {"rinde_alta": 9.50, "rinde_baja": 5.00, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Trigo", {"rinde_alta": 4.50, "rinde_baja": 2.50, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Girasol", {"rinde_alta": 2.80, "rinde_baja": 1.50, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Sorgo", {"rinde_alta": 6.00, "rinde_baja": 3.50, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Arroz", {"rinde_alta": 7.00, "rinde_baja": 4.00, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+    ("Otro cultivo", {"rinde_alta": 4.00, "rinde_baja": 2.00, "rinde_suelo": 0.0, "unidad": "t/ha"}),
+]
+
+ESTADIOS_FENOLOGICOS = [
+    ("VE", "VE – Emergencia", "temprano",
+     "Emergencia de plántulas. El suelo domina la reflectancia. Rinde orientativo; ideal para detectar fallas."),
+    ("VC", "VC – Cotiledonar", "temprano",
+     "Cotiledones completamente abiertos. Rinde orientativo; evaluación de rodal inicial."),
+    ("V1", "V1 – Primer nudo / 1ª hoja trifoliada", "temprano",
+     "Primera hoja trifoliada / par de hojas desplegadas. Rinde orientativo."),
+    ("V2", "V2 – Segundo nudo", "temprano",
+     "Dos nudos con hojas desplegadas. Rinde orientativo."),
+    ("V3", "V3 – Tercer nudo", "temprano",
+     "Tres nudos. Crecimiento vegetativo inicial. Rinde orientativo."),
+    ("V4", "V4 – Cuarto nudo", "temprano",
+     "Cuatro nudos. Inicio de ramificación. Rinde orientativo."),
+    ("V5", "V5 – Quinto nudo", "vegetativo",
+     "Cinco nudos. Rápida acumulación de biomasa pre-floración."),
+    ("V6", "V6 – Sexto nudo", "vegetativo",
+     "Cierre incipiente de entresurco. Diferenciación de estructuras."),
+    ("V7", "V7 – Séptimo nudo", "vegetativo",
+     "Canopeo en expansión activa. Buen indicador de vigor y biomasa."),
+    ("V8", "V8 – Octavo nudo", "vegetativo",
+     "Casi cobertura completa del suelo. Alta demanda nutricional."),
+    ("V9", "V9 – Noveno nudo", "vegetativo",
+     "Crecimiento vegetativo avanzado previo a floración."),
+    ("V10", "V10 – Décimo nudo", "vegetativo",
+     "Máximo porte vegetativo pre-reproductivo."),
+    ("R1", "R1 – Inicio de floración", "reproductivo",
+     "Aparición de primeras flores. Inicio del período crítico."),
+    ("R2", "R2 – Floración plena", "reproductivo",
+     "Floración generalizada en nudos superiores. Definición de potencial."),
+    ("R3", "R3 – Inicio formación de vainas/espigas", "optimo",
+     "Vainas de 5 mm en nudos superiores. ÓPTIMO: Alta correlación con rinde final."),
+    ("R4", "R4 – Vainas completamente desarrolladas", "optimo",
+     "Vainas de 2 cm con máximo potencial de granos. ÓPTIMO: Excelente predicción de rinde."),
+    ("R5", "R5 – Inicio de llenado de grano", "optimo",
+     "Granos perceptibles al tacto (semilla de 3 mm). ÓPTIMO: Máxima correlación NDVI vs cosecha."),
+    ("R6", "R6 – Grano / semilla completa", "reproductivo",
+     "Vainas con cavidad ocupada al 100%. Fin de acumulación de materia seca."),
+    ("R7", "R7 – Inicio de maduración", "maduracion",
+     "Una vaina normal con color de madurez. Inicio de senescencia y caída de hojas."),
+    ("R8", "R8 – Madurez plena (cosecha)", "maduracion",
+     "95% de vainas maduras. Cultivo listo para cosecha. Senescencia completa."),
+]
 
 
 class DialogoCobertura(QDialog):
@@ -69,8 +131,8 @@ class DialogoCobertura(QDialog):
         self.resultados = []
         self.parametros = {}
         self._cancelar = False
-        self.setWindowTitle("NDVI Cobertura – Suelo / Baja / Alta vegetación")
-        self.resize(980, 720)
+        self.setWindowTitle("NDVI Cobertura – Suelo / Baja / Alta vegetación y Rendimiento")
+        self.resize(1020, 740)
         self._construir()
 
     # ------------------------------------------------------------------ UI
@@ -98,8 +160,13 @@ class DialogoCobertura(QDialog):
         lay.addLayout(botones)
         principal.addWidget(grupo, 2)
 
-        # Parámetros
-        fila_param = QHBoxLayout()
+        # Parámetros organizados en pestañas
+        self.tabs_param = QTabWidget()
+
+        # Pestaña 1: Clasificación NDVI
+        tab_clasif = QWidget()
+        lay_clasif = QHBoxLayout(tab_clasif)
+        lay_clasif.setContentsMargins(6, 8, 6, 6)
 
         g_bandas = QGroupBox("Tipo de ortomosaico")
         f_bandas = QFormLayout(g_bandas)
@@ -123,7 +190,7 @@ class DialogoCobertura(QDialog):
         f_bandas.addRow(self.rb_multi)
         f_bandas.addRow("Banda Rojo:", self.sp_rojo)
         f_bandas.addRow("Banda NIR:", self.sp_nir)
-        fila_param.addWidget(g_bandas)
+        lay_clasif.addWidget(g_bandas)
 
         g_umbral = QGroupBox("Umbrales de clasificación")
         f_umbral = QFormLayout(g_umbral)
@@ -140,7 +207,7 @@ class DialogoCobertura(QDialog):
         self.chk_rango = QCheckBox("Ignorar valores fuera de [-1, 1] (fondo / sin dato)")
         self.chk_rango.setChecked(True)
         f_umbral.addRow(self.chk_rango)
-        fila_param.addWidget(g_umbral)
+        lay_clasif.addWidget(g_umbral)
 
         for rb in (self.rb_rgb, self.rb_ndvi, self.rb_multi):
             rb.toggled.connect(self._modo_bandas)
@@ -165,9 +232,75 @@ class DialogoCobertura(QDialog):
         f_lim.addRow("", self.chk_seleccion)
         f_lim.addRow(self.chk_clasificado)
         f_lim.addRow("Carpeta de salida:", self.fw_carpeta)
-        fila_param.addWidget(g_lim)
+        lay_clasif.addWidget(g_lim)
 
-        principal.addLayout(fila_param)
+        self.tabs_param.addTab(tab_clasif, "⚙️ Clasificación NDVI")
+
+        # Pestaña 2: Rendimiento y Estadio Fenológico
+        tab_rinde = QWidget()
+        lay_rinde = QVBoxLayout(tab_rinde)
+        lay_rinde.setContentsMargins(10, 8, 10, 8)
+
+        self.chk_rinde = QCheckBox("Habilitar estimación de rendimiento (t/ha) y producción total")
+        f_chk = self.chk_rinde.font()
+        f_chk.setBold(True)
+        self.chk_rinde.setFont(f_chk)
+        self.chk_rinde.toggled.connect(self._actualizar_estado_rinde)
+        lay_rinde.addWidget(self.chk_rinde)
+
+        fila_rinde = QHBoxLayout()
+
+        # Grupo Cultivo y Estadio
+        g_cultivo = QGroupBox("Cultivo y Estadio Fenológico")
+        f_cultivo = QFormLayout(g_cultivo)
+
+        self.cb_cultivo = QComboBox()
+        for nombre, _ in CULTIVOS:
+            self.cb_cultivo.addItem(nombre)
+        self.cb_cultivo.currentIndexChanged.connect(self._al_cambiar_cultivo)
+        f_cultivo.addRow("Cultivo:", self.cb_cultivo)
+
+        self.cb_estadio = QComboBox()
+        for cod, etiqueta, cat, ayuda in ESTADIOS_FENOLOGICOS:
+            self.cb_estadio.addItem(etiqueta, {"codigo": cod, "categoria": cat, "ayuda": ayuda})
+        self.cb_estadio.currentIndexChanged.connect(self._al_cambiar_estadio)
+        f_cultivo.addRow("Estadio fenológico:", self.cb_estadio)
+
+        self.lbl_estadio_ayuda = QLabel("")
+        self.lbl_estadio_ayuda.setWordWrap(True)
+        f_cultivo.addRow(self.lbl_estadio_ayuda)
+
+        fila_rinde.addWidget(g_cultivo, 3)
+
+        # Grupo Calibración de Rindes
+        g_calib = QGroupBox("Rendimiento de Referencia por Clase de Vigor")
+        f_calib = QFormLayout(g_calib)
+
+        self.sp_rinde_alta = self._spin_rinde(3.80)
+        self.sp_rinde_baja = self._spin_rinde(2.20)
+        self.sp_rinde_suelo = self._spin_rinde(0.00)
+
+        for sp in (self.sp_rinde_alta, self.sp_rinde_baja, self.sp_rinde_suelo):
+            sp.valueChanged.connect(self._al_cambiar_valores_rinde)
+
+        f_calib.addRow(self._etiqueta_color("#1a9641", "Alta veg. (verde):"), self.sp_rinde_alta)
+        f_calib.addRow(self._etiqueta_color("#fdd700", "Baja veg. (amarillo):"), self.sp_rinde_baja)
+        f_calib.addRow(self._etiqueta_color("#d7191c", "Suelo desnudo (rojo):"), self.sp_rinde_suelo)
+
+        lbl_info_calib = QLabel("La producción de cada lote se obtiene sumando las hectáreas de cada clase "
+                                "multiplicadas por su rinde de referencia.")
+        lbl_info_calib.setWordWrap(True)
+        lbl_info_calib.setStyleSheet("color: #666666; font-size: 8.5pt;")
+        f_calib.addRow(lbl_info_calib)
+
+        fila_rinde.addWidget(g_calib, 2)
+        lay_rinde.addLayout(fila_rinde)
+
+        self.tabs_param.addTab(tab_rinde, "🌾 Rendimiento y Fenología")
+        principal.addWidget(self.tabs_param)
+
+        self._al_cambiar_estadio()
+        self._actualizar_estado_rinde()
 
         # Ejecución
         fila_ejec = QHBoxLayout()
@@ -221,6 +354,89 @@ class DialogoCobertura(QDialog):
         sp.setSingleStep(0.05)
         sp.setValue(valor)
         return sp
+
+    def _spin_rinde(self, valor):
+        sp = QDoubleSpinBox()
+        sp.setRange(0.0, 1000.0)
+        sp.setDecimals(2)
+        sp.setSingleStep(0.1)
+        sp.setValue(valor)
+        sp.setSuffix(" t/ha")
+        return sp
+
+    def _al_cambiar_cultivo(self):
+        idx = self.cb_cultivo.currentIndex()
+        if 0 <= idx < len(CULTIVOS):
+            _, defaults = CULTIVOS[idx]
+            self.sp_rinde_alta.setValue(defaults["rinde_alta"])
+            self.sp_rinde_baja.setValue(defaults["rinde_baja"])
+            self.sp_rinde_suelo.setValue(defaults["rinde_suelo"])
+        if self.resultados:
+            self._mostrar_tabla()
+            self.lbl_estado.setText(self._resumen())
+
+    def _al_cambiar_estadio(self):
+        data = self.cb_estadio.currentData()
+        if not data:
+            return
+        cat = data.get("categoria", "")
+        ayuda = data.get("ayuda", "")
+        if cat == "optimo":
+            estilo = "background-color: #dff1e3; color: #0e3511; border: 1px solid #1a9641;"
+            prefijo = "🟢 <b>Ventana Óptima:</b> "
+        elif cat == "reproductivo":
+            estilo = "background-color: #f1f8e9; color: #2e7d32; border: 1px solid #8bc34a;"
+            prefijo = "🟡 <b>Período Reproductivo:</b> "
+        elif cat == "vegetativo":
+            estilo = "background-color: #fffde7; color: #f57f17; border: 1px solid #fbc02d;"
+            prefijo = "🟡 <b>Desarrollo Vegetativo:</b> "
+        elif cat == "maduracion":
+            estilo = "background-color: #fff3e0; color: #e65100; border: 1px solid #ff9800;"
+            prefijo = "🟠 <b>Maduración / Senescencia:</b> "
+        else:  # temprano
+            estilo = "background-color: #fbe1e1; color: #b71c1c; border: 1px solid #d7191c;"
+            prefijo = "ℹ️ <b>Implantación / Emergencia:</b> "
+        self.lbl_estadio_ayuda.setStyleSheet("padding: 6px; border-radius: 4px; " + estilo)
+        self.lbl_estadio_ayuda.setText(prefijo + ayuda)
+        if self.resultados:
+            self.lbl_estado.setText(self._resumen())
+
+    def _al_cambiar_valores_rinde(self):
+        if self.resultados and self.chk_rinde.isChecked():
+            self._mostrar_tabla()
+            self.lbl_estado.setText(self._resumen())
+
+    def _actualizar_estado_rinde(self):
+        activo = self.chk_rinde.isChecked()
+        self.cb_cultivo.setEnabled(activo)
+        self.cb_estadio.setEnabled(activo)
+        self.sp_rinde_alta.setEnabled(activo)
+        self.sp_rinde_baja.setEnabled(activo)
+        self.sp_rinde_suelo.setEnabled(activo)
+        texto_tab = "🌾 Rendimiento y Fenología (Activo)" if activo else "🌾 Rendimiento y Fenología"
+        self.tabs_param.setTabText(1, texto_tab)
+        if self.resultados:
+            self._mostrar_tabla()
+            self.lbl_estado.setText(self._resumen())
+
+    def _rinde_params(self):
+        data = self.cb_estadio.currentData() or {}
+        return {
+            "habilitado": self.chk_rinde.isChecked(),
+            "cultivo": self.cb_cultivo.currentText(),
+            "estadio_codigo": data.get("codigo", ""),
+            "estadio_nombre": self.cb_estadio.currentText(),
+            "estadio_categoria": data.get("categoria", ""),
+            "estadio_ayuda": data.get("ayuda", ""),
+            "rinde_alta": self.sp_rinde_alta.value(),
+            "rinde_baja": self.sp_rinde_baja.value(),
+            "rinde_suelo": self.sp_rinde_suelo.value(),
+            "unidad_rinde": "t/ha",
+            "unidad_prod": "t",
+        }
+
+    def _columnas(self):
+        return COLUMNAS_BASE + (COLUMNAS_RINDE if self.chk_rinde.isChecked() else [])
 
     def _etiqueta_color(self, color, texto):
         lbl = QLabel()
@@ -392,6 +608,9 @@ class DialogoCobertura(QDialog):
                          if capa_vec is not None else ""),
             "fecha": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
         }
+        rp = self._rinde_params()
+        self.parametros.update(rp)
+        self.parametros["rinde_params"] = rp
         self._capa_limite = capa_vec
         self.resultados = []
         errores = []
@@ -465,10 +684,11 @@ class DialogoCobertura(QDialog):
 
     # ------------------------------------------------------------ informe
     def _filas(self):
-        filas = [fila_informe(r["nombre"], r["areas_m2"]) for r in self.resultados]
+        rp = self._rinde_params() if self.chk_rinde.isChecked() else None
+        filas = [fila_informe(r["nombre"], r["areas_m2"], rp) for r in self.resultados]
         if len(self.resultados) > 1:
             suma = {c: sum(r["areas_m2"][c] for r in self.resultados) for c in (SUELO, BAJA, ALTA)}
-            filas.append(fila_informe("TOTAL", suma))
+            filas.append(fila_informe("TOTAL", suma, rp))
         return filas
 
     def _resumen(self):
@@ -477,6 +697,10 @@ class DialogoCobertura(QDialog):
         f = self._filas()[-1]
         texto = "Área total: {} ha  |  Suelo {} %  |  Baja veg. {} %  |  Alta veg. {} %  |  Vegetación total {} ha ({} %)".format(
             fmt(f[1]), fmt(f[3], 1), fmt(f[5], 1), fmt(f[7], 1), fmt(f[8]), fmt(f[9], 1))
+        if self.chk_rinde.isChecked() and len(f) >= 12:
+            texto += "\nProducción total est.: {} t  |  Rendimiento promedio ponderado: {} t/ha  |  Cultivo: {} ({})".format(
+                fmt(f[11], 1), fmt(f[10], 2), self.cb_cultivo.currentText(),
+                (self.cb_estadio.currentData() or {}).get("codigo", ""))
         avisos = []
         if any(r["geografico"] for r in self.resultados):
             avisos.append("raster en coordenadas geográficas: área aproximada (esfera)")
@@ -488,13 +712,20 @@ class DialogoCobertura(QDialog):
 
     def _mostrar_tabla(self):
         filas = self._filas()
+        cols = self._columnas()
+        self.tabla.setColumnCount(len(cols))
+        self.tabla.setHorizontalHeaderLabels(cols)
         self.tabla.setRowCount(len(filas))
         for r, fila in enumerate(filas):
             negrita = fila[0] == "TOTAL" and r == len(filas) - 1 and len(self.resultados) > 1
             for c, valor in enumerate(fila):
                 if c == 0:
                     texto = valor
-                elif c % 2 == 1 and c != 1:
+                elif c in (3, 5, 7, 9):
+                    texto = fmt(valor, 1)
+                elif c == 10:
+                    texto = fmt(valor, 2)
+                elif c == 11:
                     texto = fmt(valor, 1)
                 else:
                     texto = fmt(valor)
@@ -504,6 +735,10 @@ class DialogoCobertura(QDialog):
                 if c in COLOR_COLUMNA:
                     color = QColor(COLOR_COLUMNA[c])
                     color.setAlpha(60)
+                    celda.setBackground(QBrush(color))
+                elif c in (10, 11):
+                    color = QColor("#7dc300")
+                    color.setAlpha(45)
                     celda.setBackground(QBrush(color))
                 if negrita:
                     fuente = celda.font()
@@ -521,7 +756,7 @@ class DialogoCobertura(QDialog):
         return filas
 
     def copiar(self):
-        lineas = ["\t".join(COLUMNAS)] + ["\t".join(f) for f in self._texto_filas()]
+        lineas = ["\t".join(self._columnas())] + ["\t".join(f) for f in self._texto_filas()]
         QApplication.clipboard().setText("\n".join(lineas))
         self.lbl_estado.setText("Tabla copiada al portapapeles (pegar en Excel).")
 
@@ -531,16 +766,28 @@ class DialogoCobertura(QDialog):
             return
         with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f, delimiter=";")
-            w.writerow(COLUMNAS)
+            w.writerow(self._columnas())
             w.writerows(self._texto_filas())
             w.writerow([])
-            w.writerow(["Fecha", self.parametros["fecha"]])
-            w.writerow(["Origen", self.parametros["origen"]])
+            w.writerow(["Fecha", self.parametros.get("fecha", "")])
+            w.writerow(["Origen", self.parametros.get("origen", "")])
             rangos = self._rangos()
             for valor, etiqueta, _ in CLASES:
                 w.writerow([etiqueta, rangos[valor]])
-            if self.parametros["poligono"]:
+            if self.parametros.get("poligono"):
                 w.writerow(["Límite", self.parametros["poligono"]])
+            if self.parametros.get("habilitado"):
+                w.writerow([])
+                w.writerow(["--- Estimación de Rendimiento ---"])
+                w.writerow(["Cultivo", self.parametros.get("cultivo", "")])
+                w.writerow(["Estadio fenológico", self.parametros.get("estadio_nombre", "")])
+                w.writerow(["Rinde ref. alta veg.", "{} t/ha".format(fmt(self.parametros.get("rinde_alta", 0.0), 2))])
+                w.writerow(["Rinde ref. baja veg.", "{} t/ha".format(fmt(self.parametros.get("rinde_baja", 0.0), 2))])
+                w.writerow(["Rinde ref. suelo", "{} t/ha".format(fmt(self.parametros.get("rinde_suelo", 0.0), 2))])
+                filas = self._filas()
+                if filas and len(filas[-1]) >= 12:
+                    w.writerow(["Rendimiento promedio ponderado", "{} t/ha".format(fmt(filas[-1][10], 2))])
+                    w.writerow(["Producción total estimada", "{} t".format(fmt(filas[-1][11], 1))])
         self.lbl_estado.setText("CSV guardado: {}".format(ruta))
 
     def _capas_fondo(self):
@@ -620,21 +867,33 @@ class DialogoCobertura(QDialog):
                 "<td class='n'>{}</td><td class='n'>{} %</td></tr>".format(
                     color, etiqueta, rangos[valor], fmt(fila[2 + 2 * i]), fmt(fila[3 + 2 * i], 1))
                 for i, (valor, etiqueta, color) in enumerate(CLASES))
+            pie_rinde = ""
+            if len(fila) >= 12:
+                pie_rinde = (
+                    "<tr><td colspan='2'>Rendimiento promedio estimado</td><td class='n'>{}</td><td class='n'>t/ha</td></tr>"
+                    "<tr><td colspan='2'>Producción total estimada</td><td class='n'>{}</td><td class='n'>t</td></tr>"
+                ).format(fmt(fila[10], 2), fmt(fila[11], 1))
             bloques.append(
                 "<section><h2>{nombre}</h2><div class='barra'>{barra}</div>"
                 "<table><thead><tr><th>Clase</th><th>Rango</th><th class='n'>Superficie (ha)</th>"
                 "<th class='n'>%</th></tr></thead><tbody>{cuerpo}</tbody><tfoot>"
                 "<tr><td colspan='2'>Vegetación total (baja + alta)</td><td class='n'>{veg}</td><td class='n'>{vegp} %</td></tr>"
                 "<tr><td colspan='2'>Área total analizada</td><td class='n'>{tot}</td><td class='n'>100 %</td></tr>"
+                "{pie_rinde}"
                 "</tfoot></table></section>".format(
                     nombre=nombre, barra=barra, cuerpo=cuerpo, veg=fmt(fila[8]), vegp=fmt(fila[9], 1),
-                    tot=fmt(fila[1])))
+                    tot=fmt(fila[1]), pie_rinde=pie_rinde))
 
         detalle = "".join(
             "<tr><td>{}</td><td>{}</td><td class='n'>{} × {}</td><td class='n'>{}</td></tr>".format(
                 html.escape(r["nombre"]), html.escape(r["ruta"]),
                 fmt(r["resolucion"][0], 4), fmt(r["resolucion"][1], 4), fmt(r["pixeles"], 0))
             for r in self.resultados)
+
+        meta_cultivo = ""
+        if p.get("habilitado"):
+            meta_cultivo = " · Cultivo: {} · Estadio: {}".format(
+                html.escape(p.get("cultivo", "")), html.escape(p.get("estadio_nombre", "")))
 
         return """<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Informe de cobertura NDVI</title>
@@ -649,16 +908,17 @@ th{{background:#f5f5f5}} .n{{text-align:right}} tfoot td{{font-weight:600}}
 .barra{{display:flex;height:18px;border-radius:4px;overflow:hidden;margin-bottom:12px;background:#eee}}
 .det td{{font-size:.85em;color:#555;word-break:break-all}}
 </style></head><body>
-<h1>Informe de cobertura NDVI</h1>
-<div class="meta">Fecha: {fecha} · Origen: {origen}{limite}</div>
+<h1>Informe de cobertura NDVI y Rendimiento</h1>
+<div class="meta">Fecha: {fecha} · Origen: {origen}{limite}{meta_cultivo}</div>
 {bloques}
 <h3>Detalle técnico</h3>
 <table class="det"><thead><tr><th>Ortomosaico</th><th>Archivo</th><th class="n">Tamaño de píxel</th><th class="n">Píxeles válidos</th></tr></thead>
 <tbody>{detalle}</tbody></table>
 <p class="meta">{avisos}</p>
 </body></html>""".format(
-            fecha=p["fecha"], origen=html.escape(p["origen"]),
-            limite=" · Límite: " + html.escape(p["poligono"]) if p["poligono"] else "",
+            fecha=p.get("fecha", ""), origen=html.escape(p.get("origen", "")),
+            limite=" · Límite: " + html.escape(p["poligono"]) if p.get("poligono") else "",
+            meta_cultivo=meta_cultivo,
             bloques="".join(bloques), detalle=detalle,
             avisos=html.escape(self._resumen().split("\n", 1)[1]) if "\n" in self._resumen() else "")
 

@@ -1,0 +1,16 @@
+[general]
+name=Mapa de Ambientes
+qgisMinimumVersion=3.16
+qgisMaximumVersion=4.99
+supportsQt6=True
+description=Calcula la superficie (ha y %) de Zona Baja (rojo), Zona Media (amarillo) y Zona Alta (verde) en mapas de ambiente y topografía.
+about=Clasifica y cuantifica la superficie de zonas de ambiente (Zona Baja = rojo, Zona Media = amarillo, Zona Alta = verde) en mapas de ambientación, rasters de clases (1, 2, 3), imágenes RGB o modelos de elevación. Genera informes con hectáreas y porcentaje por lote, tabla comparativa, exportación a CSV, HTML e informe PDF formal con logo de LaSierra 360, mapas generales y fichas individuales por lote.
+version=1.0.0
+author=LaSierra 360
+email=lasierra360.corp@gmail.com
+category=Raster
+tags=ambientes,zonificacion,topografia,loma,bajo,agricultura,raster,area
+icon=icon.svg
+experimental=False
+deprecated=False
+
